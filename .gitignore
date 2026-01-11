@@ -1,0 +1,23 @@
+# Go build files
+*.exe
+*.test
+*.out
+
+# Local mocks / test backends
+mock-*.go
+
+# IDE / editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Binary tools you might have downloaded
+curl
+
+# Logs
+*.log
