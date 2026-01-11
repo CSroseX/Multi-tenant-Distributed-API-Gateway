@@ -1,57 +1,54 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"time"
+    "log"
+    "net/http"
+    "github.com/redis/go-redis/v9"
+    "time"
 
-	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/middleware"
-	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/proxy"
-	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/ratelimit"
-	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/tenant"
-	"github.com/redis/go-redis/v9"
+
+    "github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/middleware"
+    "github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/proxy"
+    "github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/ratelimit"
+    "github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/tenant"
+    "github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/observability"
 )
 
 func main() {
-	// ---- Backends ----
-	userBackend := "http://localhost:9001"
-	orderBackend := "http://localhost:9002"
+    shutdown := observability.InitTracer("api-gateway")
+    defer shutdown()
 
-	userHandler, err := proxy.ProxyHandler(userBackend)
-	if err != nil {
-		log.Fatal(err)
-	}
+    // Redis client
+    rdb := redis.NewClient(&redis.Options{
+        Addr: "localhost:6379",
+    })
+    rl := ratelimit.NewRateLimiter(rdb, 5, time.Minute)
 
-	orderHandler, err := proxy.ProxyHandler(orderBackend)
-	if err != nil {
-		log.Fatal(err)
-	}
+    // Backend proxies
+    userHandler, _ := proxy.ProxyHandler("http://localhost:9001")
+    orderHandler, _ := proxy.ProxyHandler("http://localhost:9002")
 
-	// ---- Redis ----
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
+    // Secured handlers
+    securedUserHandler := tenant.Middleware(
+        rl.Middleware(userHandler),
+    )
+    securedOrderHandler := tenant.Middleware(
+        rl.Middleware(orderHandler),
+    )
 
-	rl := ratelimit.NewRateLimiter(redisClient, 5, time.Minute)
+    // Router
+    router := proxy.NewRouter()
+    router.AddRoute("/users", securedUserHandler)
+    router.AddRoute("/orders", securedOrderHandler)
 
-	// ---- Secure route handlers (middleware applied AFTER routing) ----
-	securedUserHandler := tenant.Middleware(
-		rl.Middleware(userHandler),
-	)
+    // Middleware order: Logging → Metrics → Tracing → Router
+    http.Handle("/", middleware.Logging(
+        middleware.Metrics(
+            middleware.Tracing(router),
+        ),
+    ))
 
-	securedOrderHandler := tenant.Middleware(
-		rl.Middleware(orderHandler),
-	)
-
-	// ---- Router ----
-	router := proxy.NewRouter()
-	router.AddRoute("/users", securedUserHandler)
-	router.AddRoute("/orders", securedOrderHandler)
-
-	// ---- Only logging wraps router ----
-	http.Handle("/", middleware.Logging(router))
-
-	fmt.Println("API Gateway running on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+    log.Println("API Gateway running on :8080")
+    log.Fatal(http.ListenAndServe(":8080", nil))
 }
+
