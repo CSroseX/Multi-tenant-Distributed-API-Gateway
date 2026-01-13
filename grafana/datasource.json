@@ -1,0 +1,11 @@
+{
+  "name": "API Gateway Metrics",
+  "type": "jsonapi",
+  "access": "proxy",
+  "url": "http://localhost:8080",
+  "basicAuth": false,
+  "isDefault": true,
+  "jsonData": {
+    "timeInterval": "2s"
+  }
+}
