@@ -30,7 +30,11 @@ func FromContext(ctx context.Context) (*Tenant, bool) {
 	return t, ok
 }
 
-// Middleware extracts tenant from API key and stores in context
+func Resolve(apiKey string) (*Tenant, bool) {
+	tenant, ok := tenants[apiKey]
+	return &tenant, ok
+}
+
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiKey := r.Header.Get("X-API-Key")
@@ -54,6 +58,20 @@ func Middleware(next http.Handler) http.Handler {
 		decisionlog.LogDecision(r, decisionlog.DecisionAllow, "API Key valid", map[string]any{
 			"tenant": tenant.ID,
 		})
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+func ResolutionMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("X-API-Key")
+		if apiKey != "" {
+			if tenant, ok := Resolve(apiKey); ok {
+				ctx := context.WithValue(r.Context(), tenantKey, tenant)
+				r = r.WithContext(ctx)
+			}
+		}
 
 		next.ServeHTTP(w, r)
 	})
