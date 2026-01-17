@@ -13,4 +13,8 @@ services:
         value: http://localhost:9002
       - key: PORT
         value: 8080
+      - key: METRICS_USERNAME
+        value: grafana
+      - key: METRICS_PASSWORD
+        value: metrics_secure_2026
     healthCheckPath: /health

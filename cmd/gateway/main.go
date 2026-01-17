@@ -18,6 +18,19 @@ import (
 	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/tenant"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+func basicAuth(handler http.Handler, username, password string) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        user, pass, ok := r.BasicAuth()
+        
+        if !ok || user != username || pass != password {
+            w.Header().Set("WWW-Authenticate", `Basic realm="metrics"`)
+            http.Error(w, "Unauthorized", http.StatusUnauthorized)
+            return
+        }
+        
+        handler.ServeHTTP(w, r)
+    })
+}
 
 func main() {
     // ---- Start mock services as goroutines (separate muxes) ----
@@ -31,7 +44,9 @@ func main() {
 	defer shutdown()
     // ---- Gateway mux ----
     gatewayMux := http.NewServeMux()
-    gatewayMux.Handle("/metrics", promhttp.Handler())
+    metricsUsername := getEnv("METRICS_USERNAME", "grafana")
+    metricsPassword := getEnv("METRICS_PASSWORD", "metrics_secure_2026")
+    gatewayMux.Handle("/metrics", basicAuth(promhttp.Handler(), metricsUsername, metricsPassword))
 	// ---- Chaos auto-recovery watcher ----
 	chaos.AutoRecover()
 
