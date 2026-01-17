@@ -3,6 +3,7 @@
 *.test
 *.out
 DEEP_SCAN_ANALYSIS.md
+DEPLOYMENT_GUIDE.md
 
 # Local mocks / test backends
 mock-*.go

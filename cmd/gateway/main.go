@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -14,20 +15,21 @@ import (
 	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/proxy"
 	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/ratelimit"
 	"github.com/CSroseX/Multi-tenant-Distributed-API-Gateway/internal/tenant"
-    "github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
 	// ---- Tracing ----
 	shutdown := observability.InitTracer("api-gateway")
 	defer shutdown()
-    http.Handle("/metrics", promhttp.Handler())
+	http.Handle("/metrics", promhttp.Handler())
 	// ---- Chaos auto-recovery watcher ----
 	chaos.AutoRecover()
 
 	// ---- Redis Client ----
+	redisAddr := getEnv("REDIS_URL", "localhost:6379")
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
+		Addr: redisAddr,
 	})
 
 	// ---- Analytics Engine ----
@@ -37,8 +39,10 @@ func main() {
 	rl := ratelimit.NewRateLimiter(rdb, 5, time.Minute)
 
 	// ---- Backend proxies ----
-	userHandler, _ := proxy.ProxyHandler("http://localhost:9001")
-	orderHandler, _ := proxy.ProxyHandler("http://localhost:9002")
+	userServiceURL := getEnv("USER_SERVICE_URL", "http://localhost:9001")
+	orderServiceURL := getEnv("ORDER_SERVICE_URL", "http://localhost:9002")
+	userHandler, _ := proxy.ProxyHandler(userServiceURL)
+	orderHandler, _ := proxy.ProxyHandler(orderServiceURL)
 
 	// ---- Middleware Stack for Secured Endpoints ----
 	// Order (from outer to inner):
@@ -74,12 +78,12 @@ func main() {
 	router.AddRoute("/admin/analytics", analytics.Handler(analyticsEngine))
 
 	finalHandler := middleware.Logging(
-	tenant.ResolutionMiddleware(
-		middleware.Metrics(
-			middleware.Tracing(router),
-            ),
-        ),
-    )
+		tenant.ResolutionMiddleware(
+			middleware.Metrics(
+				middleware.Tracing(router),
+			),
+		),
+	)
 
 	http.Handle("/", finalHandler)
 
@@ -122,7 +126,17 @@ func main() {
 	log.Println("  curl http://localhost:8080/admin/chaos/status")
 	log.Println("===============================================")
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	port := getEnv("PORT", "8080")
+	log.Printf("Starting server on port %s\n", port)
+	log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+
+// getEnv retrieves environment variable or returns default
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
 
 func serveDemoHTML(w http.ResponseWriter, r *http.Request) {

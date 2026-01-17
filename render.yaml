@@ -1,0 +1,47 @@
+# Render Blueprint for automated deployment
+services:
+  # Main API Gateway
+  - type: web
+    name: api-gateway
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: ./gateway
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: redis-cache
+          property: connectionString
+      - key: USER_SERVICE_URL
+        value: http://localhost:9001
+      - key: ORDER_SERVICE_URL
+        value: http://localhost:9002
+      - key: PORT
+        value: 8080
+    healthCheckPath: /health
+
+  # Mock User Service
+  - type: web
+    name: mock-user-service
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: ./mock-user
+    envVars:
+      - key: PORT
+        value: 9001
+
+  # Mock Order Service
+  - type: web
+    name: mock-order-service
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: ./mock-order
+    envVars:
+      - key: PORT
+        value: 9002
+
+# Redis Database
+databases:
+  - name: redis-cache
+    plan: free
+    ipAllowList: []
