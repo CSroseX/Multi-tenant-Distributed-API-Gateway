@@ -21,9 +21,6 @@ WORKDIR /root/
 # Copy binaries from builder
 COPY --from=builder /app/gateway .
 
-# Copy static files if needed
-COPY static ./static
-
 EXPOSE 8080 9001 9002
 
 # Default command (can be overridden)

@@ -1,204 +1,260 @@
-# Quick Reference: Chaos Demo Commands
+# Quick Reference - Chaos Demo Commands for Render Deployment
 
-## Start Everything
 
-```bash
-# Terminal 1: Redis
-docker run -d --name redis -p 6379:6379 redis:latest
+## Important Notes
 
-# Terminal 2: Mock services
-go run mock-user.go &
-go run mock-order.go &
+1. Service runs on Render free tier
+2. Service sleeps after 15 minutes of no activity
+3. First request after sleep takes 30-60 seconds
+4. Chaos auto-recovers after specified duration
+5. Metrics persist but may reset on redeployment
+6. Grafana updates every 30 seconds
+7. Rate limit is 5 requests per minute per tenant
 
-# Terminal 3: Gateway
-go run cmd/gateway/main.go
-```
+All commands are for Windows Command Prompt (cmd).
+Run all commands in cmd on your local computer.
+Output appears in cmd unless stated otherwise.
+
+Base URL: https://centralized-api-orchestration-engine.onrender.com
 
 ## Access Points
 
-```bash
-# Demo UI (open in browser)
-http://localhost:8080/demo
+### Demo UI (open in browser)
 
-# Metrics (raw JSON)
-curl http://localhost:8080/admin/metrics | jq
-
-# Chaos status
-curl http://localhost:8080/admin/chaos/status | jq
-
-# Analytics
-curl http://localhost:8080/admin/analytics?tenant=tenantA | jq
 ```
+https://centralized-api-orchestration-engine.onrender.com/demo
+```
+
+What you see: Interactive web page with buttons
+
+### Metrics (JSON format)
+
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/metrics
+```
+
+Output in cmd: JSON data with all metrics
+
+### Chaos Status
+
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/chaos/status
+```
+
+Output in cmd: JSON showing current chaos configuration
+
+### Analytics
+
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/analytics?tenant=tenantA
+```
+
+Output in cmd: JSON showing tenant analytics data
+
+---
 
 ## Chaos Commands
 
-### Enable Chaos
+### Enable Backend Failure (100% errors)
 
-```bash
-# Backend failure (100% errors)
-curl -X POST http://localhost:8080/admin/chaos \
-  -H "Content-Type: application/json" \
-  -d '{"fail_backend":true,"duration_sec":30}'
-
-# Inject latency (2 seconds)
-curl -X POST http://localhost:8080/admin/chaos \
-  -H "Content-Type: application/json" \
-  -d '{"slow_ms":2000,"duration_sec":30}'
-
-# Drop requests (30%)
-curl -X POST http://localhost:8080/admin/chaos \
-  -H "Content-Type: application/json" \
-  -d '{"drop_percent":30,"duration_sec":30}'
-
-# Combined (1s latency + 20% drops)
-curl -X POST http://localhost:8080/admin/chaos \
-  -H "Content-Type: application/json" \
-  -d '{"slow_ms":1000,"drop_percent":20,"duration_sec":30}'
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos -H "Content-Type: application/json" -d "{\"fail_backend\":true,\"duration_sec\":30}"
 ```
 
-### Disable Chaos
+What happens: All requests will fail with 503 error for 30 seconds
 
-```bash
-# Immediate recovery
-curl -X POST http://localhost:8080/admin/chaos/recover
+### Enable Latency Injection (2 second delay)
 
-# Or wait 30 seconds for auto-recovery
+Run in cmd:
 ```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos -H "Content-Type: application/json" -d "{\"slow_ms\":2000,\"duration_sec\":30}"
+```
+
+What happens: All requests will take 2 seconds longer for 30 seconds
+
+### Enable Request Dropping (30% drop rate)
+
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos -H "Content-Type: application/json" -d "{\"drop_percent\":30,\"duration_sec\":30}"
+```
+
+What happens: 30% of requests will be dropped for 30 seconds
+
+### Enable Combined Chaos (1 second delay + 20% drops)
+
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos -H "Content-Type: application/json" -d "{\"slow_ms\":1000,\"drop_percent\":20,\"duration_sec\":30}"
+```
+
+What happens: Requests delayed by 1 second and 20% dropped for 30 seconds
+
+### Disable Chaos Immediately
+
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos/recover
+```
+
+What happens: All chaos effects stop immediately
+
+---
 
 ## Test Requests
 
-```bash
-# Valid key (200 OK)
-curl -H "X-API-Key: sk_test_123" http://localhost:8080/users
+### Valid Request (should succeed with 200)
 
-# Invalid key (401)
-curl http://localhost:8080/users
-
-# During backend failure chaos (503)
-# (after enabling chaos)
-curl -H "X-API-Key: sk_test_123" http://localhost:8080/users
+Run in cmd:
+```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
 ```
 
-## Load Testing
+Expected output: {"service": "users", "status": "ok"}
 
-```bash
-# Simple: 10 requests
-for i in {1..10}; do
-  curl -H "X-API-Key: sk_test_123" http://localhost:8080/users &
-done
+### Invalid API Key (should fail with 401)
 
-# Moderate: 100 requests/sec for 10 seconds
-# (Use the demo page button or ab tool)
-ab -n 1000 -c 100 \
-  -H "X-API-Key: sk_test_123" \
-  http://localhost:8080/users/
-
-# High-frequency: 500 req/sec
-# (Use the demo page button)
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/users
 ```
 
-## View Logs
+Expected output: Tenant not found
 
-```bash
-# In gateway terminal, you'll see decision logs like:
-# {"timestamp":"...","decision":"CHAOS","reason":"Injected backend failure",...}
+### Request During Backend Failure Chaos (should fail with 503)
 
-# Filter chaos events (if using jq):
-# grep CHAOS | jq
+First enable chaos, then run in cmd:
 ```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
+```
+
+Expected output: Service Unavailable
+
+---
 
 ## Demo Flow (5 minutes)
 
-```bash
-# 1. Check baseline
-curl http://localhost:8080/admin/chaos/status | jq
+### Step 1: Check Baseline
 
-# 2. Send traffic
-curl -H "X-API-Key: sk_test_123" http://localhost:8080/users
-
-# 3. Inject failure
-curl -X POST http://localhost:8080/admin/chaos \
-  -d '{"fail_backend":true,"duration_sec":30}' \
-  -H "Content-Type: application/json"
-
-# 4. Try request (should fail)
-curl -H "X-API-Key: sk_test_123" http://localhost:8080/users
-
-# 5. Check metrics spike
-curl http://localhost:8080/admin/metrics | jq '.requests_total'
-
-# 6. Recover
-curl -X POST http://localhost:8080/admin/chaos/recover
-
-# 7. Try request (should succeed)
-curl -H "X-API-Key: sk_test_123" http://localhost:8080/users
-
-# 8. Verify metrics normalized
-curl http://localhost:8080/admin/metrics | jq '.requests_total'
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/chaos/status
 ```
 
-## Grafana Setup (2 minutes)
+Expected: Chaos should be disabled
 
-```bash
-# 1. Add data source
-# Type: JSON API
-# URL: http://localhost:8080/admin/metrics
-# Refresh: 2s
+### Step 2: Send Normal Traffic
 
-# 2. Test connection
-# Should see requests_total, errors_total, etc.
-
-# 3. Create chart
-# Panel type: Graph
-# Query: Select any metric from dropdown
-# Legend: Show labels
-
-# 4. Add alert
-# Condition: errors_total > 0
-# Alert title: Chaos Detected
+Run in cmd:
+```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
 ```
 
-## PowerShell Equivalents (Windows)
+Expected: Request succeeds
 
-```powershell
-# Valid request
-Invoke-WebRequest -Headers @{"X-API-Key"="sk_test_123"} `
-  -Uri http://localhost:8080/users
+### Step 3: Inject Failure
 
-# Enable chaos
-$body = @{"fail_backend"=$true;"duration_sec"=30} | ConvertTo-Json
-Invoke-WebRequest -Method Post -Uri http://localhost:8080/admin/chaos `
-  -Headers @{"Content-Type"="application/json"} `
-  -Body $body
-
-# Check status
-Invoke-WebRequest -Uri http://localhost:8080/admin/chaos/status |
-  Select-Object -ExpandProperty Content |
-  ConvertFrom-Json
-
-# Recover
-Invoke-WebRequest -Method Post -Uri http://localhost:8080/admin/chaos/recover
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos -H "Content-Type: application/json" -d "{\"fail_backend\":true,\"duration_sec\":30}"
 ```
 
-## Metrics API Fields
+Expected: Chaos enabled
 
-```bash
-curl http://localhost:8080/admin/metrics | jq
+### Step 4: Try Request (should fail)
 
-# Output structure:
+Run in cmd:
+```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
+```
+
+Expected: Service Unavailable error
+
+### Step 5: Check Metrics Spike
+
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/metrics
+```
+
+Expected: Error count increased in JSON output
+
+### Step 6: Recover
+
+Run in cmd:
+```
+curl -X POST https://centralized-api-orchestration-engine.onrender.com/admin/chaos/recover
+```
+
+Expected: Chaos disabled
+
+### Step 7: Try Request (should succeed)
+
+Run in cmd:
+```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
+```
+
+Expected: Request succeeds again
+
+### Step 8: Verify Metrics Normalized
+
+Run in cmd:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/metrics
+```
+
+Expected: No new errors in JSON output
+
+---
+
+## Grafana Setup
+
+Your Grafana Cloud is at: https://csrosex.grafana.net
+
+### Step 1: Access Grafana
+
+Open in browser: https://csrosex.grafana.net
+
+### Step 2: View Dashboard
+
+1. Click Dashboards menu
+2. Find your API Gateway dashboard
+3. View live metrics updating every 30 seconds
+
+### Step 3: Query Metrics Manually
+
+1. Click Explore menu
+2. Select data source: grafanacloud-csrosex-prom
+3. Type metric name: api_gateway_requests_total
+4. Click Run Query
+5. View graph and data
+
+---
+
+## Metrics Output Structure
+
+When you run:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/metrics
+```
+
+You get JSON like this:
+```
 {
   "requests_total": {
     "/users:tenantA:200": 123,
-    "/users:tenantA:503": 45,
-    "/orders:tenantB:200": 89
+    "/users:tenantA:503": 45
   },
   "errors_total": {
-    "/users:tenantA": 45,
-    "/orders:tenantB": 2
+    "/users:tenantA": 45
   },
   "requests_dropped": {
-    "/users:tenantA": 12,
-    "/orders:tenantB": 5
+    "/users:tenantA": 12
   },
   "rate_limit_blocks": {
     "tenantA": 3
@@ -213,63 +269,82 @@ curl http://localhost:8080/admin/metrics | jq
 }
 ```
 
-## Metrics Interpretation
-
-```bash
-# Calculate error rate
-curl http://localhost:8080/admin/metrics | jq '
-  .requests_total["/users:tenantA:503"] / 
-  (
-    .requests_total["/users:tenantA:200"] + 
-    .requests_total["/users:tenantA:503"]
-  ) * 100
-'
-# Output: percentage
-
-# Check if chaos active
-curl http://localhost:8080/admin/chaos/status | jq '.enabled'
-# Output: true/false
-
-# View dropped request count
-curl http://localhost:8080/admin/metrics | jq '.requests_dropped'
-```
-
-## Common Issues & Fixes
-
-```bash
-# Gateway won't start
-# → Check Redis is running: docker ps | grep redis
-
-# Chaos doesn't work
-# → Check it's enabled: curl .../admin/chaos/status | jq .enabled
-
-# No metrics data
-# → Send a request first: curl -H "X-API-Key: sk_test_123" .../users
-
-# Metrics endpoint 404
-# → Gateway may be on different port
-# → Check startup logs: Gateway running on http://localhost:8080
-```
-
-## Files to Know
-
-- `cmd/gateway/main.go` - Routes, demo page, startup
-- `internal/chaos/admin.go` - Chaos API handlers
-- `internal/chaos/middleware.go` - Request injection logic
-- `internal/middleware/metrics.go` - Metrics collection
-- `CHAOS_DEMO.md` - Full documentation
-- `IMPLEMENTATION_SUMMARY.md` - Architecture guide
-
-## Key Statistics
-
-| Metric | Without Chaos | With Chaos |
-|--------|---------------|-----------|
-| Latency P95 | ~50ms | +2000ms (if slow_ms=2000) |
-| Error Rate | 0% | Configurable (0-100%) |
-| Throughput | Normal | -30% (if drops=30%) |
-| Monitoring Impact | Negligible | Obvious spike |
+Each field explained:
+- requests_total: Total requests by route, tenant, and status code
+- errors_total: Total error count by route and tenant
+- requests_dropped: Requests dropped by chaos or issues
+- rate_limit_blocks: How many times rate limit blocked requests
+- latency_percentiles: Response time statistics (p50, p95, p99)
 
 ---
 
-**Tip:** Use the demo page UI for interactive testing - it's easier than curl commands!
+## Common Issues and Fixes
 
+### Gateway is slow to respond
+
+Reason: Render free tier sleeps after inactivity
+Fix: Visit https://centralized-api-orchestration-engine.onrender.com/health first
+Wait 30-60 seconds, then try again
+
+### Chaos not working
+
+Reason: Chaos may be disabled
+Fix: Check status with:
+```
+curl https://centralized-api-orchestration-engine.onrender.com/admin/chaos/status
+```
+
+### No metrics data
+
+Reason: No requests sent yet
+Fix: Send some test requests first:
+```
+curl -H "X-API-Key: sk_test_123" https://centralized-api-orchestration-engine.onrender.com/users
+```
+
+### Demo page not loading
+
+Reason: Service may be sleeping
+Fix: Wait 30-60 seconds and refresh browser
+
+---
+
+## Key Statistics
+
+What happens when you enable chaos:
+
+| Metric | Normal | With Chaos |
+|--------|--------|------------|
+| Latency P95 | 50ms | 2000ms+ (if slow_ms=2000) |
+| Error Rate | 0% | Up to 100% (if fail_backend=true) |
+| Throughput | 100% | 70% (if drop_percent=30) |
+
+---
+
+## Testing with Demo Page
+
+Instead of using cmd, you can use the demo page for easier testing.
+
+### Step 1: Open Demo Page
+
+Open in browser:
+```
+https://centralized-api-orchestration-engine.onrender.com/demo
+```
+
+### Step 2: Send Requests
+
+Click button on page: "Send 100 Requests"
+Watch the responses in the page
+
+### Step 3: Enable Chaos
+
+Use buttons on page to enable different chaos modes
+Watch how responses change
+
+### Step 4: View Metrics
+
+Metrics update automatically on the demo page
+No need to run curl commands
+
+---
