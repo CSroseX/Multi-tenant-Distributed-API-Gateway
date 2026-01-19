@@ -80,15 +80,15 @@ func main() {
 	// Order (from outer to inner):
 	// 1. Tenant Resolution  - Extracts tenant from X-API-Key (non-blocking)
 	// 2. Analytics          - Records all requests, latency, errors (even if blocked later)
-	// 3. Rate Limiter       - Enforces rate limits per tenant
-	// 4. Chaos              - Simulates latency/errors if enabled
+	// 3. Chaos              - Simulates latency/errors if enabled (tracks ALL requests)
+	// 4. Rate Limiter       - Enforces rate limits per tenant
 	// 5. Backend Handler    - Forwards to upstream service
 
 	securedUserHandler := tenant.ResolutionMiddleware(
 		analytics.Middleware(
 			analyticsEngine,
-			rl.Middleware(
-				chaos.Middleware(userHandler),
+			chaos.Middleware(
+				rl.Middleware(userHandler),
 			),
 		),
 	)
@@ -96,8 +96,8 @@ func main() {
 	securedOrderHandler := tenant.ResolutionMiddleware(
 		analytics.Middleware(
 			analyticsEngine,
-			rl.Middleware(
-				chaos.Middleware(orderHandler),
+			chaos.Middleware(
+				rl.Middleware(orderHandler),
 			),
 		),
 	)
@@ -473,6 +473,7 @@ button.secondary {
   padding: 0.5rem;
   margin-bottom: 0.25rem;
   border-left: 4px solid #3b82f6;
+  white-space: pre-wrap;
 }
 
 .log-entry.success { border-left-color: #22c55e; }
