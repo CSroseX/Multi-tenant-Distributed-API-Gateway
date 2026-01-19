@@ -489,6 +489,28 @@ button.secondary {
 .guide-card h3 {
   margin-top: 2rem;
 }
+.grafana-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.grafana-link {
+  display: inline-block;
+  background: #fff;
+  color: #000;
+  border: 3px solid #000;
+  padding: 0.9rem 1.2rem;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 4px 4px 0 #000;
+  transition: transform 0.1s ease;
+}
+
+.grafana-link:hover {
+  transform: translate(-3px, -3px);
+}
+
 </style>
 
 </head>
@@ -511,6 +533,19 @@ button.secondary {
         <div class="layout-columns">
             <!-- LEFT COLUMN: Load Generation, Chaos, Attack, Control -->
             <div class="left-column">
+				<div class="card grafana-card">
+				    <div class="card-title">
+				        See Live Metrics in Grafana Dashboard
+				    </div>
+				    <a
+				        href="https://csrosex.grafana.net/public-dashboards/3c2996c1426f4726bbd53f729b5c2a2c"
+				        target="_blank"
+				        rel="noopener noreferrer"
+				        class="grafana-link"
+				    >
+				        Open Grafana Dashboard
+				    </a>
+				</div>
                 <div class="card">
                     <div class="card-title">
                         <span class="icon">📊</span>
